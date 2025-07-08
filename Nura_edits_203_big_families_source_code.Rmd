@@ -1,0 +1,1041 @@
+---
+title: "Do People from Big Families Love Big Families?"
+author: "Nura Hossainzadeh, Ayushi Goel, Ross Vrbanac, Richard Lumpi"
+subtitle: A study on the relationship between sibling count and conceptions of ideal
+  family size
+output:
+  html_document:
+    toc: yes
+    df_print: paged
+  pdf_document:
+    toc: yes
+    number_sections: yes
+---
+
+```{r, include=FALSE}
+library(dplyr) 
+library(knitr)
+library(moments)
+library(ggplot2)
+library(tidyverse)
+library(sandwich)
+library(lmtest)
+library(stargazer)
+library(patchwork)
+library(webshot)
+library(magick)
+library(gridExtra)
+library(grid)
+webshot::install_phantomjs()
+```
+
+\newpage
+
+```{r, include=FALSE}
+# Load data - 3544 Observations
+gss_data_raw <- read.csv("GSS_chldidel.csv", sep = ";")
+nrow(gss_data_raw)
+```
+
+```{r, include=FALSE}
+# Check answer split between Ballots and Number of Ideal Children - Ballot only valid for Ballot A and B
+table(gss_data_raw$ballot, gss_data_raw$chldidel)
+```
+
+```{r, include=FALSE}
+# Check responses to number of siblings question and ballots - answered across all 3 Ballots
+table(gss_data_raw$ballot, gss_data_raw$sibs)
+```
+
+```{r, include=FALSE}
+sum(gss_data_raw$ballot %in% c("Ballot a", "Ballot b"))
+```
+
+```{r, include=FALSE}
+unique(gss_data_raw$sibs)
+```
+
+```{r, include=FALSE}
+unique(gss_data_raw$chldidel)
+```
+
+```{r, include=FALSE}
+# 1223 respondents with Inapplicable
+sum(gss_data_raw$chldidel %in% c(".i:  Inapplicable"))
+```
+
+```{r, include=FALSE}
+# 555 respondents "As many as you want"
+sum(gss_data_raw$chldidel %in% c("As many as you want") & gss_data_raw$ballot %in% c("Ballot a", "Ballot b"))
+```
+
+```{r, include=FALSE}
+# Filter out invalid rows - 1758 observations
+gss_data <- gss_data_raw[!gss_data_raw$sibs %in% c("-97", ".n:  No answer"),]
+gss_data <- gss_data[!gss_data$chldidel %in% c(".i:  Inapplicable",  "As many as you want"),]
+```
+
+```{r, include=FALSE}
+table(gss_data$chldidel)
+```
+
+
+```{r, include=FALSE}
+# Convert "7 or more" to 7 in chldidel
+gss_data$chldidel <-  gsub("7 or more", "7", gss_data$chldidel)
+unique(gss_data$chldidel)
+```
+
+```{r, include=FALSE}
+# Convert strings into numeric values
+gss_data$chldidel <- as.numeric(gss_data$chldidel)
+gss_data$sibs <- as.numeric(gss_data$sibs)
+```
+
+
+```{r, include=FALSE}
+# Use this seed to ensure we have the same split
+set.seed(123)
+
+# Split into exploration and confirmation set
+ex_gss_data <- gss_data %>% sample_frac(0.3)
+con_gss_data <- gss_data[!gss_data$id_ %in% ex_gss_data$id_,]
+
+```
+
+# Introduction
+
+Modernity has often been described as an era of increased social isolation; small and intimate local communities have been unraveled by exoduses to industrial cities; globalization and increased facility of travel have brought individuals to live their lives in unfamiliar lands; most recently, social media has often replaced real-life interaction even between people living in the same locality. Perhaps the most intimate of social ties, the family, too, has been affected by the degradation of social ties in the modern world; the nuclear family has become measurably smaller, and fertility rates are declining both in the US and on a global level. According to a study by The Lancet, by the year 2100, 97% of countries will have a fertility rate that is not adequate to sustain their population\footnote{“The Lancet: Dramatic declines in global fertility rates set to transform global population patterns by 2100,” Accessed 15 July 2024. https://www.healthdata.org/news-events/newsroom/news-releases/lancet-dramatic-declines-global-fertility-rates-set-transform}. 
+
+Much has been written on the relationship between family size and individual aptitudes and achievements; on the one hand, a focus on the career successes and academic aptitudes of individual children, and on the other, a focus on relationship success (in marriage, for example) and social aptitudes\footnote{See, for example, Judith Blake and Douglas Downey on the “research dilution hypothesis,” which says that intellectual and educational outcomes are significantly worse for children in larger families because the family’s limited resources are spread thinly between children (Blake, Judith. Family size and achievement. Vol. 3. Univ of California Press, 2022.; Downey, Douglas B. "When bigger is not better: Family size, parental resources, and children's educational performance." American sociological review (1995): 746-761.).}. However, little has been written on family size and the attitudes and perceptions of its individual members. In this study we explore the relationship between the number of siblings an individual has and that individual’s perception of an ideal number of children for a family. While our study does not seek to trace a cause-and-effect explanatory relationship between family size and perceptions of an ideal family, we are interested in exploring the relationship between these two factors as a preliminary step to potential future studies. Our research investigates the following question:
+
+
+\begin{quote}
+  \textit{How do people with different numbers of siblings perceive the ideal number of children for a family?}
+\end{quote}
+
+# Data and Methodology
+
+In our study, we conceptualize “number of siblings” as the number of genetically or non-genetically related individuals with whom a respondent shared a family environment. This includes step-siblings and adopted siblings, capturing the full social experience of growing up in a multi-sibling household. We conceptualize “ideal number of children” as the number of children a person believes a family should have, reflecting their views on overall family dynamics.
+
+Our data was sourced from the General Social Survey (GSS), a nationally representative survey administered to adult Americans by NORC (formerly the National Opinion Research Center). NORC is an independent research institution funded by both private and public sponsors, with over half its staff being University of Chicago faculty members and administrators. The GSS, launched in 1972, continues to survey adult Americans annually on a broad range of demographic, behavioral, and attitudinal questions. To operationalize our concepts, we downloaded the 2022 survey and compared the responses given by each person on two chosen questions. Number of siblings was operationalized by examining responses to the question, “How many brothers and sisters did you have? Please count those born alive, but no longer living, as well as those alive now. Also include stepbrothers and stepsisters, and children adopted by your parents”. We believe this phrasing adequately captures the social experience of a multi-sibling household. Ideal number of children was operationalized by examining responses to the question, “What do you think is the ideal number of children for a family to have?” We believe this phrasing adequately captures the idea of emphasizing the family unit rather than an individual perspective. 
+
+We filtered the data by removing rows where questions were inapplicable. Notably, the question about the ideal number of children was only posed in two of the three ballots (Ballot A and B) in the 2022 survey (`r sum(gss_data_raw$ballot %in% c("Ballot a", "Ballot b"))` of `r nrow(gss_data_raw)` respondents). We excluded responses indicated "as many as you want," as we seek to measure the content of an ideal, rather than inquire whether the ideal exists (`r sum(gss_data_raw$chldidel %in% c("As many as you want") & gss_data_raw$ballot %in% c("Ballot a", "Ballot b"))` of the `r sum(gss_data_raw$ballot %in% c("Ballot a", "Ballot b"))` respondents). Responses with no or invalid answers were removed, leaving us with `r nrow(gss_data)` valid responses. The response for “7 or more” children was transformed to 7 to maintain the metric scale, though this may introduce a slight bias.
+
+To analyze the relationship between the number of siblings and the ideal number of children, we used ordinary least squares (OLS) regression. The dataset was split into an exploration set (30%, n = `r nrow(ex_gss_data)`) and a validation set (70%, n = `r nrow(con_gss_data)`). The study's graphs and analysis are based on the validation set. To run a linear regression model for both the exploration and the validation set, relying on large-sample properties, rests on two assumptions, namely that the data is independent and identically distributed (IID) and that a best linear predictor (BLP) exists and is unique. **IID:** GSS is based on probability multi-stage cluster sampling for the US. Large sample and sampling design guarantees that the data can be reasonably considered IID for the  purpose of the study. **BLP:** A best linear predictor exists if the covariance between the output variable and each feature is finite. Histograms show that the number of siblings has a pronounced right skew (skewness = `r round(skewness(con_gss_data$sibs),2)`) with an indication of a long tail (maximum number of siblings in the dataset was `r max(con_gss_data$sibs)`), and the ideal number of children has a slight right skew (skewness = `r round(skewness(con_gss_data$chldidel),2)`). The analysis assumes the population distribution of siblings is reasonably bounded to ensure that the variance-covariance matrix between the number of siblings and the ideal number of children is finite and a BLP exists. Univariate analysis and dropping defaults in categorical transformations of the independent variable ensures no perfect colinearity, supporting the assumption that the BLP is unique.
+
+
+```{r, include=FALSE}
+summary(con_gss_data$chldidel)
+```
+
+```{r, include=FALSE}
+table(con_gss_data$chldidel)
+```
+
+```{r, include=FALSE}
+summary(con_gss_data$sibs)
+```
+
+```{r, include=FALSE}
+table(con_gss_data$sibs)
+```
+
+```{r, include=FALSE}
+cov(con_gss_data[,c("chldidel","sibs")])
+```
+
+```{r histograms, echo=FALSE, warning=FALSE, fig.width=5, fig.height=1.3, out.width='100%', out.height='100%', fig.align='center'}
+# Create Histogram for Siblings
+hist_sibs <- ggplot(con_gss_data, aes(x = sibs)) +
+  geom_bar() +
+  labs(title = "Histogram of Number of Siblings",
+       x = "Number of Siblings",
+       y = "Count") +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 6),    
+    axis.title.x = element_text(size = 4),                
+    axis.title.y = element_text(size = 4),                
+    axis.text.x = element_text(size = 4),               
+    axis.text.y = element_text(size = 4)               
+  )
+
+# Create Histogram for Ideal Number of Children
+hist_child <- ggplot(con_gss_data, aes(x = chldidel)) +
+  geom_bar() +
+  labs(title = "Histogram of Ideal Number of Children",
+       x = "Ideal Number of Children",
+       y = "Count") +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 6),    
+    axis.title.x = element_text(size = 4),                
+    axis.title.y = element_text(size = 4),                
+    axis.text.x = element_text(size = 4),               
+    axis.text.y = element_text(size = 4)               
+  )
+
+# Display histograms side by side
+(hist_sibs | hist_child)
+```
+
+```{r, include=FALSE}
+skewness(con_gss_data$sibs)
+```
+
+```{r, include=FALSE}
+skewness(con_gss_data$chldidel)
+```
+
+```{r, include=FALSE}
+max(con_gss_data$sibs)
+```
+
+```{r, include=FALSE}
+round(mean(con_gss_data$chldidel),2)
+```
+
+```{r, include=FALSE}
+round(mean(con_gss_data$sibs),2)
+```
+
+```{r, include=FALSE}
+sd(con_gss_data$sibs)
+```
+
+```{r, include=FALSE}
+sum(con_gss_data$sibs > 10)
+```
+
+# Model Specifications and Results
+
+The visualization of the sample joint distribution in the scatterplot, together with the histograms, indicates that most respondents see two or three children as the ideal number of children (mean = `r round(mean(con_gss_data$chldidel),2)`). Visual inspection does not show a clear pattern, or structural break in the data, even though a slight indication of a parabolic shape emerges. Furthermore, most observations in the sample are drawn in a narrow space, introducing limited variability in the number of siblings (mean = `r round(mean(con_gss_data$sibs),2)`, sample standard deviation = `r round(sd(con_gss_data$sibs),2)`), making the analysis susceptible to noise from the outlier values.
+
+```{r, include=FALSE}
+# Estimate the Mean Model and Robust Standard Errors - NOT INCLUDED IN THE REGRESSION TABLE
+con_model_mean <- lm(chldidel ~ 1, data=con_gss_data)
+con_cov_matrix_mean <- vcovHC(con_model_mean, type = "HC0")
+con_robust_se_mean <- sqrt(diag(con_cov_matrix_mean))
+```
+
+```{r, include=FALSE}
+# Estimate the Base Model and Robust Standard Errors
+con_model_base <- lm(chldidel ~ sibs, data=con_gss_data)
+con_cov_matrix_base <- vcovHC(con_model_base, type = "HC0")
+con_robust_se_base <- sqrt(diag(con_cov_matrix_base))
+```
+
+```{r, include=FALSE}
+# Estimate the Quadratic Model and Robust Standard Errors
+con_model_quad <- lm(chldidel ~ sibs + I(sibs**2), data=con_gss_data)
+con_cov_matrix_quad <- vcovHC(con_model_quad, type = "HC0")
+con_robust_se_quad <- sqrt(diag(con_cov_matrix_quad))
+```
+
+```{r, include=FALSE}
+# T-test for Sibling coefficient Base Model: Test against a t-distribution, using robust standard errors
+res_coeff_test_sibs_base_con <- coeftest(con_model_base, vcov = vcovHC(con_model_base, type = "HC0"))
+res_coeff_test_sibs_base_con
+```
+
+```{r, include=FALSE}
+# Wald Test Base Model (reduced) vs. Quad Model (full): Use Waldtest with robust standard errors to perform a heteroskedasticity robust F test
+res_wald_test_base_quad_con <- waldtest(con_model_base, con_model_quad, vcov = vcovHC(con_model_quad, type = "HC0"))
+res_wald_test_base_quad_con$F
+```
+
+```{r warning=FALSE, include=FALSE}
+# Generate the regression table using stargazer and save it as an HTML file
+stargazer(con_model_base, con_model_quad,
+          se = list(con_robust_se_base, con_robust_se_quad),
+          title = "Model Estimates for Number of Ideal Children",
+          column.labels = c("Base", "Quadratic"),
+          dep.var.labels = "Number of Ideal Children",
+          covariate.labels = c("Number of Siblings", "Number of Siblings Squared"),
+          font.size = "large", 
+          notes.align = "l",
+          notes = "Model coefficients with robust standard errors.",
+          header=FALSE,
+          type="html",
+          out="regression_table.html")
+```
+
+```{r, include=FALSE, warning=FALSE, fig.width=8, fig.height=4, fig.align='center'}
+# Scatter Plot with Quadratic Regression Line
+con_gss_summary <- as.data.frame(table(con_gss_data$sibs, con_gss_data$chldidel))
+names(con_gss_summary) <- c("sibs", "chldidel", "count")
+con_gss_data_count <- merge(con_gss_data, con_gss_summary, by = c("sibs", "chldidel"))
+
+pred_quad_con <- data.frame(child_pred = predict(con_model_quad, con_gss_data), sibs=con_gss_data$sibs)
+
+scatter_plot <- ggplot() +
+  geom_jitter(data = con_gss_data_count, aes(x = sibs, y = chldidel, color = count), width = 0.2, height = 0.2, alpha = 0.3) +
+  scale_color_gradient(low = "blue", high = "red") +
+  labs(
+    title = "Scatter Plot with Quadratic Model Fit:\nNumber of Siblings vs. Ideal Number of Children",
+    x = "Number of Siblings",
+    y = "Number of Ideal Children",
+    fill = "Count",
+    color = "Count"
+  ) +
+  theme(
+    plot.title = element_text(size = 4),  
+    axis.title.x = element_text(size = 4),
+    axis.title.y = element_text(size = 4),
+    axis.text.x = element_text(size = 4),
+    axis.text.y = element_text(size = 4)) +
+  theme_minimal() +
+  geom_line(color='red',data = pred_quad_con, aes(x=sibs, y=child_pred))
+
+# Save the scatter plot as a variable for later use
+scatter_plot
+```
+
+```{r include=FALSE}
+# Convert the HTML table to an image using webshot
+clip <- c(0, 0, 600, 500)  
+webshot("regression_table.html", "regression_table.png", delay = 0.5, cliprect = clip)
+
+# Read the image
+table_img <- image_read("regression_table.png")
+```
+
+
+```{r combined, echo=FALSE, warning=FALSE, fig.width=10, fig.height=4, fig.align='center'}
+# Resize the table image to be larger
+table_img <- image_resize(table_img, "3200x3600")
+
+# Ensure the table image and scatter plot have similar dimensions
+# table_grob <- rasterGrob(table_img, width = unit(1, "npc"), height = unit(1, "npc"))
+table_grob <- rasterGrob(table_img, width = unit(1, "npc"), height = unit(1, "npc"), interpolate = TRUE)
+
+# Adjust the widths to balance the table and scatter plot
+grid.arrange(table_grob, scatter_plot, ncol = 2, widths = c(1, 1))
+```
+
+
+To begin the investigation into whether a statistically significant relationship exists between the number of siblings and number of ideal children, we estimate the “Base” model:
+
+**Base Model:** $NumberOfIdealChildren = \beta_{0} + \beta_{1}NumberOfSiblings + e$
+
+Visual inspection of the error terms (see Appendix) further suggests a parabolic relationship. We add a quadratic term to better capture the data generating process (susceptible to sample variability driven by outliers), referred to as the “Quadratic” model (plotted in the scatterplot):
+
+**Quadratic Model:** $NumberOfIdealChildren = \delta_{0} + \delta_{1}NumberOfSiblings + \delta_{2}NumberOfSiblings^2 + e$
+
+The regression table presents the coefficient estimates for both models. The Base Model exhibits a positive, statistically significant relationship. A t-test on the coefficient $\beta_{1}$ rejects the null hypothesis ($\beta_{1}$ = 0) with a p-value of less than 0.01. A heteroskedasticity robust Wald test rejects the null hypothesis of the Base model in favor of the Quadratic model (F-statistic: `r round(res_wald_test_base_quad_con$F[2],2)` with a p-value < 0.01). For the quadratic model, the ideal number of children increases up to around eleven siblings (inflection point at 10.71), after which the relationship declines. Using, the Quadratic model, we found that adjusting the number of siblings--for example, from one to two--increases the number of ideal children from 2.41 to 2.54. The model estimates an ideal number of closer to three children until its inflection point at eleven siblings, after which it begins to decline. Both models poorly explain the variability, indicated by low $R^2$ values. To further investigate the descriptive potential of a linear model, we estimated a more flexible model by converting each number of siblings into a dummy variable, referred to as the “Indicator” model.
+
+```{r, warning=FALSE, echo=FALSE}
+# Indicator Model 
+con_gss_data$sibs_ind <- as.factor(con_gss_data$sibs)
+con_model_ind <- lm(chldidel ~ sibs_ind, data=con_gss_data)
+con_cov_matrix_ind <- vcovHC(con_model_ind, type = "HC0")
+con_robust_se_ind <- sqrt(diag(con_cov_matrix_ind))
+```
+
+```{r, include=FALSE, results='asis', warning=FALSE, echo=FALSE}
+# Regression Table with Robust SE - EXCLUDED FROM REPORT
+# stargazer(con_model_ind,
+#           se = list(con_robust_se_ind),
+#           title = "Indicator Exploration Set Residuals",
+#           dep.var.labels = "Children",
+#           # covariate.labels = c("Number of Siblings"),
+#           font.size = "tiny",
+#           header=FALSE)
+```
+
+**Indicator Model:** $NumberOfIdealChildren = \lambda_{0} + \sum_{siblings}\lambda_{i}NumberOfSiblings + e$
+
+The explanatory ability of the Indicator model only slightly increases, ($R^2$ = `r round(summary(con_model_ind)$r.squared,2)`). Again, we can observe an upward trend, with each indicator for more than 3 siblings up to the 10th sibling significant with a p-value < 0.01. Beyond the 10th sibling, we observe a mix of significant and insignificant dummy coefficients, both positive and negative, supporting our reservations to draw inference from small numbers of observations. The results are consistent across both the exploration and validation set, apart from the F-test, which in the exploration set did not reject the null. A challenge in achieving strong model fit is likely a result of the ideal number of children being a discrete variable with large relative gaps between values.
+
+```{r, echo=FALSE, warning=FALSE, fig.width=4, fig.height=3.5, fig.align='center'}
+
+# Prepare summary table for jitter plot
+con_gss_summary <- as.data.frame(table(con_gss_data$sibs, con_gss_data$chldidel))
+names(con_gss_summary) <- c("sibs", "chldidel", "count")
+con_gss_data_count <- merge(con_gss_data, con_gss_summary, by = c("sibs", "chldidel"))
+
+# Predict using the indicator model
+pred_ind <- data.frame(
+  sibs = con_gss_data$sibs,
+  pred = predict(con_model_ind)
+)
+
+# Average prediction per sibs group (constant per group)
+library(dplyr)
+pred_ind_summary <- pred_ind %>%
+  group_by(sibs) %>%
+  summarise(child_pred = mean(pred)) %>%
+  arrange(as.numeric(as.character(sibs)))
+
+# Create the scatter plot with indicator model line only
+scatter_plot_ind <- ggplot() +
+  geom_jitter(data = con_gss_data_count, aes(x = sibs, y = chldidel, color = count),
+              width = 0.3, height = 0.3, alpha = 0.3) +
+  scale_color_gradient(low = "blue", high = "red") +
+  labs(
+    title = "Number of Siblings vs. Ideal Number of Children:\nIndicator Model",
+    x = "Number of Siblings",
+    y = "Number of Ideal Children",
+    fill = "Count",
+    color = "Count"
+  ) +
+  theme_minimal() +
+  theme(
+  plot.title = element_text(size = 9),
+  axis.title.x = element_text(size = 8),
+  axis.title.y = element_text(size = 8),
+  axis.text.x = element_text(size = 8),
+  axis.text.y = element_text(size = 8),
+  legend.title = element_text(size = 8)) +
+  geom_line(data = pred_ind_summary,
+            aes(x = as.numeric(as.character(sibs)), y = child_pred),
+            color = 'darkgreen')
+
+# Display the plot
+scatter_plot_ind
+
+```
+
+
+# Discussion
+
+Our analysis indicates that there is a statistically significant, positive relationship between siblings and the ideal number of children.  Both the Base and Quadratic model capture a range between roughly 2 and 3 for respondents growing up with zero to ten children, beyond which can reasonably be considered outliers in contemporary US families (n = `r sum(con_gss_data$sibs > 10)`). The concentration of observations makes it challenging to draw inference for people from large families. In practical terms, where having children is a discrete rather than a continuous matter, both models indicate a positive relationship with rather limited practical significance, indicating more of a leaning towards 3 rather than 2 children the more siblings a respondent grew up with. Even the highly flexible specification with dummy variables for each number of siblings explains very little of the variation in the outcome variable despite a large number of coefficients.
+
+Ultimately, our study suggests that there is no practical pattern between siblings and the ideal number of children, and that the ideal family size in the US centers around two to three children. The actual fertility rate in the US sits at an estimated 1.62 per woman\footnote{Hamilton, Brady, et al. Vital Statistics Rapid Release Births: Provisional Data for 2023. 2024.}, which suggests that whether it be cultural or monetary reasons, US families may be having fewer children than they ideally prefer. A 2023 Gallup study on Americans’ ideal family size drew a similar inference, noting that while participants preferred an average family size of 2.7 children, declining birth rates indicate that  “Americans’ views of the ideal may not be their personal reality”\footnote{ Inc, Gallup. “Americans’ Preference for Larger Families Highest since 1971.” Gallup.com, 25 Sept. 2023, news.gallup.com/poll/511238/americans-preference-larger-families-highest-1971.aspx.}. Future research should focus on other variables describing the variability in the ideal number of children, rather than solely the number of siblings a person has.
+
+
+
+\newpage
+# Appendix
+
+**Link to Data Source** 
+
+- GSS Data Explorer: https://gssdataexplorer.norc.org/variables/vfilter
+- Variables of interest: chldidel and sibs
+
+**Model Specifications**
+
+We have tried the following specifications which were discussed in the main report
+
+- Mean Model: Not straight forward from the plots if there is a relationship at all - first just look at the mean.
+- Base Model: Investigate whether there is evidence for a linear relationship, we found a parabola in the error terms, motivated the next model.
+- Quadratic Model: Better capture sample pattern with a quadratic relationship, errors are now centered around zero - see plot below.
+- Indicator Model: Find potential structural breaks in the data, findings were used to set up the large family model. First significant term was sibling number 4 in the evaluation set.
+
+To investigate how well simpler models with structural breaks and trend interactions could approach the Indicator Model we tried the following:
+
+- Siblings vs No Siblings Model: A binary dummy variable indicating if a respondent had a sibling or not. Poor explanatory performance.
+- Siblings vs No Siblings Model with a trend for Siblings: Adding a trend term to the model made the coefficient on the dummy insignificant.
+- Large Family Model: A binary dummy variable for having more than three siblings, indication that bigger families lean more towards 3 rather than 2.
+- Large Family Model with Trend interaction Term: Trend for siblings with an interaction term to have structural break and change in slope, all coefficients individually insignificant.
+
+We also tried higher polynomial models to capture more variability. They only marginally but not meaningfully increased $R^2$  ($R^2$ = 0.053 for polynomial of degree 5), and not useful in reasoning about the relationship. Logarithmic transformations have been omitted as both the dependent and independent variables have meaningful 0 values.
+
+**Residual Plots**
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, fig.width=5, fig.height=2.5, out.width='100%', out.height='100%', fig.align='center'}
+con_res_base <- resid(con_model_base)
+con_fit_base <- fitted(con_model_base) 
+con_eval_base <- data.frame(con_res_base, con_fit_base)
+
+res_plot_base <- ggplot(con_eval_base, aes(x=con_fit_base, y=con_res_base)) +
+  geom_jitter(width = 0.01, height = 0.01, alpha=0.1) +
+  geom_smooth(method = "loess", color = "red") +
+  theme_minimal() +
+  labs(title = "Base Model",
+       x = "Fitted Values",
+       y = "Residuals") +
+  theme(
+    plot.title = element_text(size = 6),  
+    axis.title.x = element_text(size = 4),
+    axis.title.y = element_text(size = 4),
+    axis.text.x = element_text(size = 4),
+    axis.text.y = element_text(size = 4)) 
+
+con_res_quad <- resid(con_model_quad)
+con_fit_quad <- fitted(con_model_quad) 
+con_eval_quad <- data.frame(con_res_quad, con_fit_quad)
+
+res_plot_quad <- ggplot(con_eval_quad, aes(x=con_fit_quad, y=con_res_quad)) +
+  geom_jitter(width = 0.0, height = 0.01, alpha = 0.1) +
+  geom_smooth(method = "loess", color = "red") +
+  theme_minimal() +
+  labs(title = "Quadratic Model",
+       x = "Fitted Values",
+       y = "Residuals") +
+  theme(
+    plot.title = element_text(size = 6),  
+    axis.title.x = element_text(size = 4),
+    axis.title.y = element_text(size = 4),
+    axis.text.x = element_text(size = 4),
+    axis.text.y = element_text(size = 4))
+ 
+
+con_res_ind <- resid(con_model_ind)
+con_fit_ind <- fitted(con_model_ind) 
+con_eval_ind <- data.frame(con_res_ind, con_fit_ind)
+
+res_plot_ind <- ggplot(con_eval_ind, aes(x=con_fit_ind, y=con_res_ind)) +
+  geom_jitter(width = 0.0, height = 0.01, alpha = 0.1) +
+  theme_minimal() +
+  labs(title = "Indicator Model",
+       x = "Fitted Values",
+       y = "Residuals") +
+  theme(
+    plot.title = element_text(size = 6),  
+    axis.title.x = element_text(size = 4),
+    axis.title.y = element_text(size = 4),
+    axis.text.x = element_text(size = 4),
+    axis.text.y = element_text(size = 4),
+    legend.text = element_text(size = 4))
+
+(res_plot_base | res_plot_quad)
+```
+
+```{r, include=FALSE}
+# Has Siblings Model - EXCLUDED FROM REPORT
+con_gss_data$has_sibs <- as.factor(ifelse(con_gss_data$sibs > 0, 1, 0))
+con_model_has_sibs <- lm(chldidel ~ has_sibs, data=con_gss_data)
+con_cov_matrix_has_sibs <- vcovHC(con_model_has_sibs, type = "HC0")
+con_robust_se_has_sibs <- sqrt(diag(con_cov_matrix_has_sibs))
+```
+
+```{r, include=FALSE}
+# Large Family Model - EXCLUDED FROM REPORT
+con_gss_data$large_fam <- as.factor(ifelse(con_gss_data$sibs > 3, 1, 0))
+con_model_large_fam <- lm(chldidel ~ large_fam , data=con_gss_data)
+con_cov_matrix_large_fam <- vcovHC(con_model_large_fam, type = "HC0")
+con_robust_se_large_fam <- sqrt(diag(con_cov_matrix_large_fam))
+```
+
+\newpage
+# Data Exploration with Exploration Set - Not included in PDF Hand In
+
+
+```{r, include=FALSE}
+summary(ex_gss_data$chldidel)
+```
+
+
+```{r, include=FALSE}
+table(ex_gss_data$chldidel)
+```
+
+
+```{r, include=FALSE}
+summary(ex_gss_data$sibs)
+```
+
+```{r, include=FALSE}
+table(ex_gss_data$sibs)
+```
+
+```{r, include=FALSE}
+cov(ex_gss_data[,c("chldidel","sibs")])
+```
+
+```{r, include=FALSE}
+cor(ex_gss_data[,c("chldidel","sibs")])
+```
+
+```{r, include=FALSE}
+ggplot(ex_gss_data, aes(x = sibs)) +
+  geom_bar() +
+  labs(title = "Histogram of Siblings",
+       x = "Number of Siblings",
+       y = "Count") +
+  theme_minimal()
+```
+
+```{r, include=FALSE}
+ggplot(ex_gss_data, aes(x = chldidel)) +
+  geom_bar() +
+  labs(title = "Histogram of Ideal Children",
+       x = "Ideal Number of Children",
+       y = "Count") +
+  theme_minimal()
+```
+
+```{r, include=FALSE}
+# simple graph to illustrate regression
+plot(ex_gss_data$sibs, ex_gss_data$chldidel)  
+abline(lm(chldidel ~ sibs, data=ex_gss_data),col='red')
+```
+
+
+## Playing around with Visualisation
+
+### Jitter Plot
+
+```{r, echo=FALSE}
+ggplot(ex_gss_data, aes(x=sibs, y=chldidel)) +
+  geom_jitter(width = 0.2, height = 0.2, alpha = 0.1) +
+  theme_minimal() +
+  labs(title = "Title",
+       x = "Siblings ",
+       y = "Number of Kids") +
+  theme(
+    plot.title = element_text(size = 10),  
+    axis.title.x = element_text(size = 8),
+    axis.title.y = element_text(size = 8),
+    axis.text.x = element_text(size = 6),
+    axis.text.y = element_text(size = 6),
+    legend.text = element_text(size = 8)) 
+```
+
+
+```{r, include=FALSE}
+table(ex_gss_data$sibs, ex_gss_data$chldidel)
+```
+
+### Heatmap
+
+```{r, echo=FALSE}
+ex_gss_summary <- as.data.frame(table(ex_gss_data$sibs, ex_gss_data$chldidel))
+names(ex_gss_summary) <- c("sibs", "chldidel", "count")
+
+ggplot(ex_gss_summary, aes(x = sibs, y = chldidel, fill = count)) +
+  geom_tile() +
+  scale_fill_gradient(low = "blue", high = "red") +
+  labs(
+    title = "Siblings and Ideal Children",
+    x = "Number of Siblings",
+    y = "Number of Children",
+    fill = "Count"
+  ) +
+  theme_minimal()
+
+```
+
+### Scatterplot with gradient coloring
+
+```{r, echo=FALSE}
+ex_gss_data_count <- merge(ex_gss_data, ex_gss_summary, by = c("sibs", "chldidel"))
+
+ggplot() +
+  geom_jitter(data = ex_gss_data_count, aes(x = sibs, y = chldidel, color = count), width = 0.2, height = 0.2, alpha = 0.3) +
+  scale_color_gradient(low = "blue", high = "red") +
+  labs(
+    title = "Scatterplot of Number of Siblings and Number of Children",
+    x = "Number of Siblings",
+    y = "Number of Children",
+    fill = "Count",
+    color = "Count"
+  ) +
+  theme_minimal()
+```
+
+\newpage
+## Models
+
+### Model Mean
+
+```{r}
+ex_model_mean <- lm(chldidel ~ 1 , data=ex_gss_data)
+
+ex_cov_matrix_mean <- vcovHC(ex_model_mean, type = "HC0")
+ex_robust_se_mean <- sqrt(diag(ex_cov_matrix_mean))
+```
+
+```{r, echo=FALSE}
+ex_res_mean <- resid(ex_model_mean)
+ex_fit_mean <- fitted(ex_model_mean) 
+
+plot(ex_fit_mean, ex_res_mean)
+lines(lowess(ex_fit_mean, ex_res_mean), col="red")
+```
+
+```{r, include=FALSE}
+ex_eval_mean <- data.frame(ex_res_mean, ex_fit_mean)
+
+ggplot(ex_eval_mean, aes(x=ex_fit_mean, y=ex_res_mean)) +
+  geom_jitter(width = 0, height = 0.01, alpha=0.1) +
+  theme_minimal() +
+  labs(title = "Mean Model Exploration Set Residuals",
+       x = "Fitted Values",
+       y = "Residuals") +
+  theme(
+    plot.title = element_text(size = 10),  
+    axis.title.x = element_text(size = 8),
+    axis.title.y = element_text(size = 8),
+    axis.text.x = element_text(size = 6),
+    axis.text.y = element_text(size = 6),
+    legend.text = element_text(size = 8)) 
+```
+
+### Base Model
+
+```{r}
+ex_model_base <- lm(chldidel ~ sibs, data=ex_gss_data)
+ex_cov_matrix_base <- vcovHC(ex_model_base, type = "HC0")
+ex_robust_se_base <- sqrt(diag(ex_cov_matrix_base))
+```
+
+```{r, echo = FALSE}
+ex_res_base <- resid(ex_model_base)
+ex_fit_base <- fitted(ex_model_base) 
+
+plot(ex_fit_base, ex_res_base)
+lines(lowess(ex_fit_base, ex_res_base), col="red")
+
+```
+
+```{r, echo=FALSE}
+ex_eval_base <- data.frame(ex_res_base,ex_fit_base)
+
+ggplot(ex_eval_base, aes(x=ex_fit_base, y=ex_res_base)) +
+  geom_jitter(width = 0.01, height = 0.01, alpha=0.1) +
+  geom_smooth(method = "loess", color = "red") +
+  theme_minimal() +
+  labs(title = "Base model Exploration Set Residuals",
+       x = "Fitted Values",
+       y = "Residuals") +
+  theme(
+    plot.title = element_text(size = 10),  
+    axis.title.x = element_text(size = 8),
+    axis.title.y = element_text(size = 8),
+    axis.text.x = element_text(size = 6),
+    axis.text.y = element_text(size = 6),
+    legend.text = element_text(size = 8)) 
+
+
+```
+
+
+### Quadratic Model
+
+```{r}
+ex_model_quad <- lm(chldidel ~ sibs + I(sibs**2), data=ex_gss_data)
+ex_cov_matrix_quad <- vcovHC(ex_model_quad, type = "HC0")
+ex_robust_se_quad <- sqrt(diag(ex_cov_matrix_quad))
+```
+
+```{r, echo=FALSE}
+ex_res_quad <- resid(ex_model_quad)
+ex_fit_quad <- fitted(ex_model_quad) 
+
+plot(ex_fit_quad, ex_res_quad)
+lines(lowess(ex_fit_quad, ex_res_quad), col="red")
+```
+
+```{r, echo=FALSE}
+ex_eval_quad <- data.frame(ex_res_quad,ex_fit_quad)
+
+ggplot(ex_eval_quad, aes(x=ex_fit_quad, y=ex_res_quad)) +
+  geom_jitter(width = 0.01, height = 0.01, alpha=0.1) +
+  geom_smooth(method = "loess", color = "red") +
+  theme_minimal() +
+  labs(title = "Quadratic Model Exploration Set Residuals",
+       x = "Fitted Values",
+       y = "Residuals") +
+  theme(
+    plot.title = element_text(size = 10),  
+    axis.title.x = element_text(size = 8),
+    axis.title.y = element_text(size = 8),
+    axis.text.x = element_text(size = 6),
+    axis.text.y = element_text(size = 6),
+    legend.text = element_text(size = 8)) 
+
+```
+
+
+### Indicator Model
+
+```{r}
+# create indicator variable
+ex_gss_data$sibs_ind <- as.factor(ex_gss_data$sibs)
+
+ex_model_ind <- lm(chldidel ~ sibs_ind, data=ex_gss_data)
+ex_cov_matrix_ind <- vcovHC(ex_model_ind, type = "HC0")
+ex_robust_se_ind <- sqrt(diag(ex_cov_matrix_ind))
+```
+
+
+```{r, echo=FALSE}
+ex_res_ind <- resid(ex_model_ind)
+ex_fit_ind <- fitted(ex_model_ind) 
+
+plot(ex_fit_ind, ex_res_ind)
+lines(lowess(ex_fit_ind, ex_res_ind), col="red")
+```
+
+
+```{r,include=FALSE}
+ex_eval_ind <- data.frame(ex_res_ind,ex_fit_ind)
+
+ggplot(ex_eval_ind, aes(x=ex_fit_ind, y=ex_res_ind)) +
+  geom_jitter(width = 0.01, height = 0.01, alpha=0.1) +
+  theme_minimal() +
+  labs(title = "Indicator Model Exploration Set Residuals",
+       x = "Fitted Values",
+       y = "Residuals") +
+  theme(
+    plot.title = element_text(size = 10),  
+    axis.title.x = element_text(size = 8),
+    axis.title.y = element_text(size = 8),
+    axis.text.x = element_text(size = 6),
+    axis.text.y = element_text(size = 6),
+    legend.text = element_text(size = 8)) 
+```
+
+
+### Model Siblings vs No-Siblings
+
+```{r}
+# create indicator variable
+ex_gss_data$has_sibs <- as.factor(ifelse(ex_gss_data$sibs > 0, 1, 0))
+
+ex_model_has_sibs <- lm(chldidel ~ has_sibs, data=ex_gss_data)
+ex_cov_matrix_has_sibs <- vcovHC(ex_model_has_sibs, type = "HC0")
+ex_robust_se_has_sibs <- sqrt(diag(ex_cov_matrix_has_sibs))
+```
+
+```{r, echo=FALSE}
+ex_res_has_sibs <- resid(ex_model_has_sibs)
+ex_fit_has_sibs <- fitted(ex_model_has_sibs) 
+
+plot(ex_fit_has_sibs, ex_res_has_sibs)
+lines(lowess(ex_fit_has_sibs, ex_res_has_sibs), col="red")
+```
+
+
+```{r,include=FALSE}
+ex_eval_has_sibs <- data.frame(ex_res_has_sibs,ex_fit_has_sibs)
+
+ggplot(ex_eval_has_sibs, aes(x=ex_fit_has_sibs, y=ex_res_has_sibs)) +
+  geom_jitter(width = 0.01, height = 0.01, alpha=0.1) +
+  theme_minimal() +
+  labs(title = "Has Siblings Model Exploration Set Residuals",
+       x = "Fitted Values",
+       y = "Residuals") +
+  theme(
+    plot.title = element_text(size = 10),  
+    axis.title.x = element_text(size = 8),
+    axis.title.y = element_text(size = 8),
+    axis.text.x = element_text(size = 6),
+    axis.text.y = element_text(size = 6),
+    legend.text = element_text(size = 8)) 
+```
+
+
+### Model Siblings vs No-Siblings with Trend for Siblings
+
+```{r}
+# Cannot estimate the interaction as there is only one estimate for non-sibs - only one trend
+ex_model_has_sibs_trend <- lm(chldidel ~ sibs + has_sibs, data=ex_gss_data)
+ex_cov_matrix_has_sibs_trend <- vcovHC(ex_model_has_sibs_trend, type = "HC0")
+ex_robust_se_has_sibs_trend <- sqrt(diag(ex_cov_matrix_has_sibs_trend))
+```
+
+```{r, echo=FALSE}
+ex_res_has_sibs_trend <- resid(ex_model_has_sibs_trend)
+ex_fit_has_sibs_trend <- fitted(ex_model_has_sibs_trend) 
+
+plot(ex_fit_has_sibs_trend, ex_res_has_sibs_trend)
+lines(lowess(ex_fit_has_sibs_trend, ex_res_has_sibs_trend), col="red")
+```
+
+```{r, include=FALSE}
+ex_eval_has_sibs_trend <- data.frame(ex_res_has_sibs,ex_fit_has_sibs_trend)
+
+ggplot(ex_eval_has_sibs_trend, aes(x=ex_fit_has_sibs_trend, y=ex_res_has_sibs_trend)) +
+  geom_jitter(width = 0.01, height = 0.01, alpha=0.1) +
+  theme_minimal() +
+  labs(title = "Has Siblings Model with Trend Exploration Set Residuals",
+       x = "Fitted Values",
+       y = "Residuals") +
+  theme(
+    plot.title = element_text(size = 10),  
+    axis.title.x = element_text(size = 8),
+    axis.title.y = element_text(size = 8),
+    axis.text.x = element_text(size = 6),
+    axis.text.y = element_text(size = 6),
+    legend.text = element_text(size = 8)) 
+```
+
+
+### Model Large Family - More than 3 Children
+
+```{r}
+# create indicator variable
+ex_gss_data$large_fam <- as.factor(ifelse(ex_gss_data$sibs > 3, 1, 0))
+
+ex_model_large_fam <- lm(chldidel ~ large_fam , data=ex_gss_data)
+ex_cov_matrix_large_fam <- vcovHC(ex_model_large_fam, type = "HC0")
+ex_robust_se_large_fam <- sqrt(diag(ex_cov_matrix_large_fam))
+```
+
+```{r, echo=FALSE}
+ex_res_large_fam <- resid(ex_model_large_fam)
+ex_fit_large_fam <- fitted(ex_model_large_fam) 
+
+plot(ex_fit_large_fam, ex_res_large_fam)
+lines(lowess(ex_fit_large_fam, ex_res_large_fam), col="red")
+```
+
+```{r, include=FALSE}
+ex_eval_large_fam <- data.frame(ex_res_large_fam, ex_fit_large_fam)
+
+ggplot(ex_eval_large_fam, aes(x=ex_fit_large_fam, y=ex_res_large_fam)) +
+  geom_jitter(width = 0.01, height = 0.01, alpha=0.1) +
+  theme_minimal() +
+  labs(title = "Large Family Model Exploration Set Residuals",
+       x = "Fitted Values",
+       y = "Residuals") +
+  theme(
+    plot.title = element_text(size = 10),  
+    axis.title.x = element_text(size = 8),
+    axis.title.y = element_text(size = 8),
+    axis.text.x = element_text(size = 6),
+    axis.text.y = element_text(size = 6),
+    legend.text = element_text(size = 8)) 
+```
+
+### Model Large Family - More than 3 Children with trend interaction
+
+```{r}
+ex_model_large_fam_inter <- lm(chldidel ~ sibs + large_fam + sibs*large_fam , data=ex_gss_data)
+ex_cov_matrix_large_fam_inter <- vcovHC(ex_model_large_fam_inter, type = "HC0")
+ex_robust_se_large_fam_inter <- sqrt(diag(ex_cov_matrix_large_fam_inter))
+```
+
+```{r, echo=FALSE}
+ex_res_large_fam_inter <- resid(ex_model_large_fam_inter)
+ex_fit_large_fam_inter <- fitted(ex_model_large_fam_inter) 
+
+plot(ex_fit_large_fam_inter, ex_res_large_fam_inter)
+lines(lowess(ex_fit_large_fam_inter, ex_res_large_fam_inter), col="red")
+```
+
+```{r, include=FALSE}
+ex_eval_large_fam_inter <- data.frame(ex_res_large_fam_inter, ex_fit_large_fam_inter)
+
+ggplot(ex_eval_large_fam_inter, aes(x=ex_fit_large_fam_inter, y=ex_res_large_fam_inter)) +
+  geom_jitter(width = 0.01, height = 0.01, alpha=0.1) +
+  theme_minimal() +
+  labs(title = "Large Family Model with Trend Interaction Exploration Set Residuals",
+       x = "Fitted Values",
+       y = "Residuals") +
+  theme(
+    plot.title = element_text(size = 10),  
+    axis.title.x = element_text(size = 8),
+    axis.title.y = element_text(size = 8),
+    axis.text.x = element_text(size = 6),
+    axis.text.y = element_text(size = 6),
+    legend.text = element_text(size = 8)) 
+
+
+```
+
+### Higher Polynomials
+
+```{r}
+ex_model_poly_3 <- lm(chldidel ~ sibs + I(sibs**2) + I(sibs**3), data=ex_gss_data)
+ex_cov_matrix_poly_3 <- vcovHC(ex_model_poly_3, type = "HC0")
+ex_robust_se_poly_3 <- sqrt(diag(ex_cov_matrix_poly_3))
+```
+
+```{r}
+ex_model_poly_4 <- lm(chldidel ~ sibs + I(sibs**2) + I(sibs**3) + I(sibs**4), data=ex_gss_data)
+ex_cov_matrix_poly_4 <- vcovHC(ex_model_poly_4, type = "HC0")
+ex_robust_se_poly_4 <- sqrt(diag(ex_cov_matrix_poly_4))
+```
+
+```{r}
+ex_model_poly_5 <- lm(chldidel ~ sibs + I(sibs**2) + I(sibs**3) + I(sibs**4) + I(sibs**5), data=ex_gss_data)
+ex_cov_matrix_poly_5 <- vcovHC(ex_model_poly_5, type = "HC0")
+ex_robust_se_poly_5 <- sqrt(diag(ex_cov_matrix_poly_5))
+```
+
+
+### Logs - Not possible
+
+```{r, include=FALSE}
+# model_log_wage <- lm(log(chldidel) ~ sibs, data=ex_gss_data)
+```
+
+```{r, include=FALSE}
+# model_log_wage <- lm(chldidel ~ log(sibs), data=ex_gss_data)
+```
+
+
+\newpage
+### Combined Table with all Models
+
+```{r, results='asis', warning=FALSE, echo=FALSE}
+# Regression Table with Robust SE
+stargazer(ex_model_mean, ex_model_base, ex_model_quad, ex_model_has_sibs,
+          se = list(ex_robust_se_mean, ex_robust_se_base, ex_robust_se_quad, ex_robust_se_has_sibs),
+          title = "Model Estimates for Number of Children - Exploration Part 1",
+          column.labels = c("Mean", "Base", "Quadratic", "Has Siblings"),
+          dep.var.labels = "Number of Children",
+          font.size = "tiny",
+          header=FALSE)
+```
+
+
+```{r, results='asis', warning=FALSE, echo=FALSE}
+# Regression Table with Robust SE
+stargazer(ex_model_has_sibs_trend, ex_model_large_fam, ex_model_large_fam_inter,
+          se = list(ex_robust_se_has_sibs_trend, ex_robust_se_large_fam, ex_robust_se_large_fam_inter),
+          title = "Model Estimates for Number of Children - Exploration Part 2",
+          column.labels = c("Has Siblings Trend", "Large Family", "Large Family Interaction"),
+          dep.var.labels = "Number of Children",
+          font.size = "tiny",
+          header=FALSE)
+```
+
+```{r, results='asis', warning=FALSE, echo=FALSE}
+# Regression Table with Robust SE
+stargazer(ex_model_poly_3, ex_model_poly_4, ex_model_poly_5,
+          se = list(ex_robust_se_poly_3, ex_robust_se_poly_4, ex_robust_se_poly_5),
+          title = "Model Estimates for Number of Children - Exploration Part 3 - Polinomials",
+          column.labels = c("Degree 3", "Degree 4", "Degree 5"),
+          dep.var.labels = "Number of Children",
+          font.size = "tiny",
+          header=FALSE)
+```
+
+```{r, results='asis', warning=FALSE, echo=FALSE}
+# Regression Table with Robust SE
+stargazer(ex_model_ind,
+          se = list(ex_robust_se_ind),
+          title = "Model Estimates for Number of Children - Exploration Part 4 - Indicator Model",
+          dep.var.labels = "Number of Children",
+          font.size = "tiny",
+          header=FALSE)
+```
+
+\newpage
+## Selected Tests
+
+### T-test for Sibling coefficent Base Model
+
+```{r}
+# Test against a t-distribution, using robust standard errors
+res_coeff_test <- coeftest(ex_model_base, vcov = vcovHC(ex_model_base, type = "HC0"))
+res_coeff_test
+```
+
+### Wald Test Base Model (reduced) vs. Quad Model (full)
+
+```{r}
+# Use Waldtest with robust standard errors to perform a heteroskedasticity robust F test
+res_wald_test_base_quad_ex <- waldtest(ex_model_base, ex_model_quad, vcov = vcovHC(ex_model_quad, type = "HC0"))
+res_wald_test_base_quad_ex
+```
+
+
+### Wald Test Large Family Model (reduced) vs. Large Family Model with Trend Interaction (full)
+
+```{r}
+# Use Waldtest with robust standard errors to perform a heteroskedasticity robust F test
+res_wald_test_base_quad_ex <- waldtest(ex_model_large_fam, ex_model_large_fam_inter, vcov = vcovHC(ex_model_large_fam_inter, type = "HC0"))
+res_wald_test_base_quad_ex
+```
+
+
+
+
+
